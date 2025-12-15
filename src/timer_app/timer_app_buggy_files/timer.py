@@ -1,6 +1,9 @@
 import time
 import os
 from flask import Flask, jsonify, render_template
+from datetime import datetime, timezone
+
+DEPLOYED_AT = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 try:
     # pytest経由では pythonpath=src で timer_app.* として解決
@@ -17,10 +20,7 @@ app = Flask(__name__, template_folder="templates")
 # デプロイ情報表示
 # =========================
 def deploy_metadata():
-    return {
-        "deployed_at": os.environ.get("DEPLOYED_AT", "unknown"),
-        "git_sha": os.environ.get("GITHUB_SHA", "unknown"),
-    }
+    return {"deployed_at": DEPLOYED_AT}
 
 
 # =========================
@@ -56,7 +56,8 @@ def current_elapsed_ms():
 # =========================
 @app.get("/")
 def index():
-    return render_template("index.html")
+    meta = deploy_metadata()
+    return render_template("index.html", deployed_at=meta["deployed_at"])
 
 
 # =========================
