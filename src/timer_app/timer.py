@@ -1,9 +1,10 @@
 import time
 import os
 from flask import Flask, jsonify, render_template
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-DEPLOYED_AT = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+JST = timezone(timedelta(hours=9))
+DEPLOYED_AT = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S JST")
 
 try:
     # pytest経由では pythonpath=src で timer_app.* として解決
