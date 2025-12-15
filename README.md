@@ -11,8 +11,8 @@ cicd-timer-flask-render-ready/
 │
 ├─ tests/
 │  ├─ test_basic.py      ← 最低限のテスト（最初に通す）
-│  ├─ test_timer.py      ←（今後追加）タイマー仕様テスト
-│  └─ test_lap.py        ←（今後追加）ラップ仕様テスト
+│  ├─ test_timer.py      ←（自分で作成）タイマー仕様テスト
+│  └─ test_lap.py        ←（自分で作成）ラップ仕様テスト
 │
 ├─ .github/
 │  └─ workflows/
