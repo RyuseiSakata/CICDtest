@@ -5,7 +5,7 @@ cicd-timer-flask-render-ready/
 ├─ src/
 │  └─ timer_app/
 │     ├─ __init__.py
-│     ├─ app.py          ← アプリ本体（Flask）
+│     ├─ timer.py        ← アプリ本体（タイマーAPI）
 │     └─ templates/
 │        └─ index.html
 │
