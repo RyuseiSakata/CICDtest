@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Timer App</title>
+  <title>Timer App (Smooth Render Version)</title>
   <style>
     body {
       font-family: sans-serif;
@@ -50,7 +50,7 @@
 
 <body>
 
-  <h1>Timer App</h1>
+  <h1>Timer App (Smooth Render Ver.)</h1>
 
   <div class="panel">
     <div class="muted">State: <span id="state">-</span></div>
@@ -70,15 +70,25 @@
   </div>
 
   <script>
-    const $ = (id) => document.getElementById(id);
+    const $ = id => document.getElementById(id);
 
     /* -----------------------------------
-       時間表示のためのローカル状態
+       ローカル状態（表示用）
     ----------------------------------- */
     let running = false;
-    let localStart = null;        // running になった瞬間のローカル時刻
-    let localBaseElapsed = 0;     // stop → start で繰り返す累積時間
 
+    // 表示に使う値（常に滑らかに変化）
+    let displayTime = 0;
+
+    // API の理論上の値（目標値）
+    let targetTime = 0;
+
+    // smoothing の強さ（0.0〜1.0）
+    const SMOOTH_FACTOR = 0.15;
+
+    /* -----------------------------------
+       フォーマット
+    ----------------------------------- */
     function fmt(ms) {
       const m = Math.floor(ms / 60000);
       const s = Math.floor((ms % 60000) / 1000);
@@ -88,6 +98,9 @@
         String(r).padStart(3, '0');
     }
 
+    /* -----------------------------------
+       API wrapper
+    ----------------------------------- */
     async function api(path, method = "GET") {
       const res = await fetch(path, { method });
       const body = await res.json().catch(() => ({}));
@@ -96,52 +109,52 @@
     }
 
     /* -----------------------------------
-       API の状態を UI に反映する処理（500msごと）
+       500msごとに API の値を取得して "targetTime" に反映
     ----------------------------------- */
     async function refresh() {
       const t = await api("/timer");
 
       $("state").textContent = t.state;
 
-      const nowRunning = t.state === "running";
+      running = (t.state === "running");
 
-      if (!nowRunning) {
-        // 停止状態 → 時間は API の値をそのまま描画
-        running = false;
-        localStart = null;
-        localBaseElapsed = t.elapsed_ms;
-        $("time").textContent = fmt(t.elapsed_ms);
-      } else {
-        // running に入った瞬間のみ基準時刻を更新
-        if (!running) {
-          localStart = Date.now() - t.elapsed_ms;
-          localBaseElapsed = 0;
-        }
-        running = true;
-      }
+      // APIの値をそのまま画面に使わず、"目標値" としてセットする
+      targetTime = t.elapsed_ms;
 
       // ラップ一覧更新
       const ul = $("laps");
       ul.innerHTML = "";
       for (const lap of t.laps) {
         const li = document.createElement("li");
-        li.textContent = `#${lap.lap_index} lap=${fmt(lap.lap_elapsed_ms)} total=${fmt(lap.total_elapsed_ms)}`;
+        li.textContent =
+          `#${lap.lap_index} lap=${fmt(lap.lap_elapsed_ms)} total=${fmt(lap.total_elapsed_ms)}`;
         ul.appendChild(li);
       }
     }
 
     /* -----------------------------------
-       リアルタイムで時間を滑らかに描画
-       → requestAnimationFrame がポイント
+       requestAnimationFrame で
+       displayTime → targetTime に滑らかに追いつく
     ----------------------------------- */
-    function renderLoop() {
-      if (running && localStart !== null) {
-        const ms = Date.now() - localStart;
-        $("time").textContent = fmt(ms);
+    let lastFrame = performance.now();
+
+    function renderLoop(now) {
+      const dt = now - lastFrame;
+      lastFrame = now;
+
+      if (running) {
+        // running 中は targetTime を「リアル時間として進める」
+        targetTime += dt;
       }
+
+      // smoothing: displayTime が targetTime にゆっくり追いつく
+      displayTime += (targetTime - displayTime) * SMOOTH_FACTOR;
+
+      $("time").textContent = fmt(Math.floor(displayTime));
+
       requestAnimationFrame(renderLoop);
     }
-    renderLoop();
+    requestAnimationFrame(renderLoop);
 
     /* -----------------------------------
        ボタン操作
@@ -151,11 +164,10 @@
     $("lap").onclick = async () => { try { await api("/timer/lap", "POST"); } catch (e) { } await refresh(); };
     $("reset").onclick = async () => { try { await api("/timer/reset", "POST"); } catch (e) { } await refresh(); };
 
-    // 初回読み込み & 500ms ごと状態同期
+    // 初期取得 & Render と同期（500msで十分）
     setInterval(refresh, 500);
     refresh();
   </script>
-
 </body>
 
 </html>
