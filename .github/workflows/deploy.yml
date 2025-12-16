@@ -7,17 +7,21 @@ on:
 
 jobs:
   deploy:
-    # CIが成功 かつ main ブランチの実行だけデプロイ
+    # CI が成功 かつ main ブランチの実行だけデプロイ
     if: >
       ${{
         github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.head_branch == 'main'
       }}
+
     runs-on: ubuntu-latest
 
     steps:
       - name: Trigger Render Deploy Hook
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          curl -sS --fail -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Deploying commit: $SHA"
+          curl -sS --fail -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=${SHA}"
