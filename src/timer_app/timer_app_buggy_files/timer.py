@@ -1,10 +1,7 @@
 import time
 import os
 from flask import Flask, jsonify, render_template
-from datetime import datetime, timezone, timedelta
-
-JST = timezone(timedelta(hours=9))
-DEPLOYED_AT = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S JST")
+import subprocess
 
 try:
     # pytest経由では pythonpath=src で timer_app.* として解決
@@ -14,6 +11,20 @@ except (
 ):  # 手動実行時は src/timer_app ディレクトリ内なので lap を直接 import
     from lap import register_lap_routes
 
+# コミットハッシュを取得
+def get_git_commit():
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return "unknown"
+
 app = Flask(__name__, template_folder="templates")
 
 
@@ -21,7 +32,9 @@ app = Flask(__name__, template_folder="templates")
 # デプロイ情報表示
 # =========================
 def deploy_metadata():
-    return {"deployed_at": DEPLOYED_AT}
+    return {
+        "commit": get_git_commit(),
+    }
 
 
 # =========================
@@ -58,7 +71,10 @@ def current_elapsed_ms():
 @app.get("/")
 def index():
     meta = deploy_metadata()
-    return render_template("index.html", deployed_at=meta["deployed_at"])
+    return render_template(
+        "index.html",
+        commit=meta["commit"],
+    )
 
 
 # =========================
