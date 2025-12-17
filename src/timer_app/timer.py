@@ -6,10 +6,13 @@ import subprocess
 try:
     # pytest経由では pythonpath=src で timer_app.* として解決
     from timer_app.lap import register_lap_routes
+    from timer_app.world_clock import register_clock_routes
 except (
     ModuleNotFoundError
 ):  # 手動実行時は src/timer_app ディレクトリ内なので lap を直接 import
     from lap import register_lap_routes
+    from world_clock import register_clock_routes
+
 
 # コミットハッシュを取得
 def get_git_commit():
@@ -25,6 +28,7 @@ def get_git_commit():
     except Exception:
         return "unknown"
 
+
 app = Flask(__name__, template_folder="templates")
 
 
@@ -35,6 +39,7 @@ def deploy_metadata():
     return {
         "commit": get_git_commit(),
     }
+
 
 # =========================
 # 内部状態（シンプル実装）
@@ -137,6 +142,12 @@ def reset_timer():
     laps = []
 
     return jsonify({"state": state, "elapsed_ms": 0, "laps": []}), 200
+
+
+# =========================
+# Clock API（世界時計）
+# =========================
+register_clock_routes(app=app)
 
 
 # =========================
