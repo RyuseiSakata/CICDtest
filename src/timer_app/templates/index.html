@@ -1,25 +1,82 @@
 <!doctype html>
 <html lang="ja">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Timer / Clock App</title>
   <style>
-    body { font-family: sans-serif; max-width: 820px; margin: 40px auto; padding: 0 16px; }
-    .row { display:flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
-    button { padding: 10px 14px; font-size: 16px; cursor: pointer; border-radius: 10px; border: 1px solid #ddd; background: #fff; }
-    button.active { border-color: #333; }
-    select { padding: 10px 12px; font-size: 16px; border-radius: 10px; border: 1px solid #ddd; }
-    .panel { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
-    .big { font-size: 44px; font-weight: 700; letter-spacing: 1px; }
-    .muted { color: #666; }
-    ul { padding-left: 18px; }
-    .hidden { display: none; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    body {
+      font-family: sans-serif;
+      max-width: 820px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+      align-items: center;
+    }
+
+    button {
+      padding: 10px 14px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+
+    button.active {
+      border-color: #333;
+    }
+
+    select {
+      padding: 10px 12px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .panel {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .big {
+      font-size: 44px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    ul {
+      padding-left: 18px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
   </style>
 </head>
+
 <body>
   <h1>Timer / Clock App</h1>
+
+  <p class="muted">
+    Commit: <code>{{ commit }}</code>
+  </p>
 
   <div class="row">
     <button id="btn-timer" class="active">Timer</button>
@@ -61,91 +118,92 @@
     <div class="muted mono" id="clock-iso">-</div>
   </div>
 
-<script>
-  const $ = (id) => document.getElementById(id);
+  <script>
+    const $ = (id) => document.getElementById(id);
 
-  function fmt(ms) {
-    const m = Math.floor(ms / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    const r = ms % 1000;
-    return String(m).padStart(2,'0') + ":" + String(s).padStart(2,'0') + "." + String(r).padStart(3,'0');
-  }
-
-  async function api(path, method="GET") {
-    const res = await fetch(path, { method });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw { status: res.status, body };
-    return body;
-  }
-
-  // ---- mode switching
-  let mode = "timer";
-  function setMode(m) {
-    mode = m;
-    const isTimer = m === "timer";
-    $("timer-area").classList.toggle("hidden", !isTimer);
-    $("laps-area").classList.toggle("hidden", !isTimer);
-    $("laps-title").classList.toggle("hidden", !isTimer);
-    $("clock-area").classList.toggle("hidden", isTimer);
-    $("btn-timer").classList.toggle("active", isTimer);
-    $("btn-clock").classList.toggle("active", !isTimer);
-  }
-  $("btn-timer").onclick = () => setMode("timer");
-  $("btn-clock").onclick = () => { setMode("clock"); syncClock(); };
-
-  // ---- TIMER (smooth rendering: client-side)
-  let t_state = "stopped";
-  let baseElapsed = 0;
-  let startAt = null;
-
-  function renderLaps(laps) {
-    const ul = $("laps");
-    ul.innerHTML = "";
-    for (const lap of laps) {
-      const li = document.createElement("li");
-      li.textContent = `#${lap.lap_index}  lap=${fmt(lap.lap_elapsed_ms)}  total=${fmt(lap.total_elapsed_ms)}`;
-      ul.appendChild(li);
+    function fmt(ms) {
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      const r = ms % 1000;
+      return String(m).padStart(2, '0') + ":" + String(s).padStart(2, '0') + "." + String(r).padStart(3, '0');
     }
-  }
 
-  async function syncTimer() {
-    const t = await api("/timer");
-    t_state = t.state;
-    baseElapsed = t.elapsed_ms;
-    startAt = (t_state === "running") ? performance.now() : null;
-    $("state").textContent = t_state;
-    renderLaps(t.laps || []);
-  }
-
-  function renderTimer() {
-    let ms = baseElapsed;
-    if (t_state === "running" && startAt !== null) {
-      ms += Math.floor(performance.now() - startAt);
+    async function api(path, method = "GET") {
+      const res = await fetch(path, { method });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw { status: res.status, body };
+      return body;
     }
-    $("time").textContent = fmt(ms);
+
+    // ---- mode switching
+    let mode = "timer";
+    function setMode(m) {
+      mode = m;
+      const isTimer = m === "timer";
+      $("timer-area").classList.toggle("hidden", !isTimer);
+      $("laps-area").classList.toggle("hidden", !isTimer);
+      $("laps-title").classList.toggle("hidden", !isTimer);
+      $("clock-area").classList.toggle("hidden", isTimer);
+      $("btn-timer").classList.toggle("active", isTimer);
+      $("btn-clock").classList.toggle("active", !isTimer);
+    }
+    $("btn-timer").onclick = () => setMode("timer");
+    $("btn-clock").onclick = () => { setMode("clock"); syncClock(); };
+
+    // ---- TIMER (smooth rendering: client-side)
+    let t_state = "stopped";
+    let baseElapsed = 0;
+    let startAt = null;
+
+    function renderLaps(laps) {
+      const ul = $("laps");
+      ul.innerHTML = "";
+      for (const lap of laps) {
+        const li = document.createElement("li");
+        li.textContent = `#${lap.lap_index}  lap=${fmt(lap.lap_elapsed_ms)}  total=${fmt(lap.total_elapsed_ms)}`;
+        ul.appendChild(li);
+      }
+    }
+
+    async function syncTimer() {
+      const t = await api("/timer");
+      t_state = t.state;
+      baseElapsed = t.elapsed_ms;
+      startAt = (t_state === "running") ? performance.now() : null;
+      $("state").textContent = t_state;
+      renderLaps(t.laps || []);
+    }
+
+    function renderTimer() {
+      let ms = baseElapsed;
+      if (t_state === "running" && startAt !== null) {
+        ms += Math.floor(performance.now() - startAt);
+      }
+      $("time").textContent = fmt(ms);
+      requestAnimationFrame(renderTimer);
+    }
+
+    $("start").onclick = async () => { try { await api("/timer/start", "POST"); } catch (e) { } await syncTimer(); };
+    $("stop").onclick = async () => { try { await api("/timer/stop", "POST"); } catch (e) { } await syncTimer(); };
+    $("lap").onclick = async () => { try { await api("/timer/lap", "POST"); } catch (e) { } await syncTimer(); };
+    $("reset").onclick = async () => { try { await api("/timer/reset", "POST"); } catch (e) { } await syncTimer(); };
+
+    // ---- CLOCK
+    async function syncClock() {
+      const tz = $("tz").value;
+      const data = await api(`/clock?tz=${encodeURIComponent(tz)}`);
+      $("clock-time").textContent = data.iso.replace("T", " ").split(".")[0];
+      $("clock-iso").textContent = `iso=${data.iso}  epoch_ms=${data.epoch_ms}`;
+    }
+    $("clock-refresh").onclick = syncClock;
+    $("tz").onchange = syncClock;
+
+    setInterval(() => { if (mode === "clock") syncClock().catch(() => { }); }, 1000);
+
+    // init
+    syncTimer();
     requestAnimationFrame(renderTimer);
-  }
-
-  $("start").onclick = async () => { try { await api("/timer/start","POST"); } catch(e){} await syncTimer(); };
-  $("stop").onclick  = async () => { try { await api("/timer/stop","POST"); } catch(e){} await syncTimer(); };
-  $("lap").onclick   = async () => { try { await api("/timer/lap","POST"); } catch(e){} await syncTimer(); };
-  $("reset").onclick = async () => { try { await api("/timer/reset","POST"); } catch(e){} await syncTimer(); };
-
-  // ---- CLOCK
-  async function syncClock() {
-    const tz = $("tz").value;
-    const data = await api(`/clock?tz=${encodeURIComponent(tz)}`);
-    $("clock-time").textContent = data.iso.replace("T", " ").split(".")[0];
-    $("clock-iso").textContent = `iso=${data.iso}  epoch_ms=${data.epoch_ms}`;
-  }
-  $("clock-refresh").onclick = syncClock;
-  $("tz").onchange = syncClock;
-
-  setInterval(() => { if (mode === "clock") syncClock().catch(()=>{}); }, 1000);
-
-  // init
-  syncTimer();
-  requestAnimationFrame(renderTimer);
-</script>
+  </script>
 </body>
+
 </html>
