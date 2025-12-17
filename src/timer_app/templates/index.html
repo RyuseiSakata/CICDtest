@@ -1,64 +1,35 @@
 <!doctype html>
 <html lang="ja">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Stop Watch App</title>
+  <title>Timer / Clock App</title>
   <style>
-    body {
-      font-family: sans-serif;
-      max-width: 720px;
-      margin: 40px auto;
-      padding: 0 16px;
-    }
-
-    .row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 12px 0;
-    }
-
-    button {
-      padding: 10px 14px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    .panel {
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      padding: 16px;
-    }
-
-    .big {
-      font-size: 44px;
-      font-weight: 700;
-      letter-spacing: 1px;
-    }
-
-    .muted {
-      color: #666;
-    }
-
-    ul {
-      padding-left: 18px;
-    }
+    body { font-family: sans-serif; max-width: 820px; margin: 40px auto; padding: 0 16px; }
+    .row { display:flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+    button { padding: 10px 14px; font-size: 16px; cursor: pointer; border-radius: 10px; border: 1px solid #ddd; background: #fff; }
+    button.active { border-color: #333; }
+    select { padding: 10px 12px; font-size: 16px; border-radius: 10px; border: 1px solid #ddd; }
+    .panel { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .big { font-size: 44px; font-weight: 700; letter-spacing: 1px; }
+    .muted { color: #666; }
+    ul { padding-left: 18px; }
+    .hidden { display: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
-
 <body>
+  <h1>Timer / Clock App</h1>
 
-  <h1>Stop Watch App</h1>
+  <div class="row">
+    <button id="btn-timer" class="active">Timer</button>
+    <button id="btn-clock">Clock</button>
+  </div>
 
-  <p class="muted">
-    Commit: <code>{{ commit }}</code>
-  </p>
-
-  <div class="panel">
+  <!-- TIMER -->
+  <div id="timer-area" class="panel">
     <div class="muted">State: <span id="state">-</span></div>
-    <div class="big" id="time">00:00.000</div>
+    <div class="big mono" id="time">00:00.000</div>
 
     <div class="row">
       <button id="start">Start</button>
@@ -68,98 +39,113 @@
     </div>
   </div>
 
-  <h2>Laps</h2>
-  <div class="panel">
+  <h2 id="laps-title">Laps</h2>
+  <div id="laps-area" class="panel">
     <ul id="laps"></ul>
   </div>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
+  <!-- CLOCK -->
+  <div id="clock-area" class="panel hidden">
+    <div class="row">
+      <label class="muted" for="tz">Timezone:</label>
+      <select id="tz">
+        <option value="UTC">UTC</option>
+        <option value="Asia/Tokyo">Asia/Tokyo</option>
+        <option value="America/New_York">America/New_York</option>
+        <option value="Europe/London">Europe/London</option>
+      </select>
+      <button id="clock-refresh">Refresh</button>
+    </div>
+    <div class="muted">Now:</div>
+    <div class="big mono" id="clock-time">-</div>
+    <div class="muted mono" id="clock-iso">-</div>
+  </div>
 
-    /* -----------------------------------
-       時間表示のためのローカル状態
-    ----------------------------------- */
-    let running = false;
-    let localStart = null;        // running になった瞬間のローカル時刻
-    let localBaseElapsed = 0;     // stop → start で繰り返す累積時間
+<script>
+  const $ = (id) => document.getElementById(id);
 
-    function fmt(ms) {
-      const m = Math.floor(ms / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      const r = ms % 1000;
-      return String(m).padStart(2, '0') + ":" +
-        String(s).padStart(2, '0') + "." +
-        String(r).padStart(3, '0');
+  function fmt(ms) {
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const r = ms % 1000;
+    return String(m).padStart(2,'0') + ":" + String(s).padStart(2,'0') + "." + String(r).padStart(3,'0');
+  }
+
+  async function api(path, method="GET") {
+    const res = await fetch(path, { method });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw { status: res.status, body };
+    return body;
+  }
+
+  // ---- mode switching
+  let mode = "timer";
+  function setMode(m) {
+    mode = m;
+    const isTimer = m === "timer";
+    $("timer-area").classList.toggle("hidden", !isTimer);
+    $("laps-area").classList.toggle("hidden", !isTimer);
+    $("laps-title").classList.toggle("hidden", !isTimer);
+    $("clock-area").classList.toggle("hidden", isTimer);
+    $("btn-timer").classList.toggle("active", isTimer);
+    $("btn-clock").classList.toggle("active", !isTimer);
+  }
+  $("btn-timer").onclick = () => setMode("timer");
+  $("btn-clock").onclick = () => { setMode("clock"); syncClock(); };
+
+  // ---- TIMER (smooth rendering: client-side)
+  let t_state = "stopped";
+  let baseElapsed = 0;
+  let startAt = null;
+
+  function renderLaps(laps) {
+    const ul = $("laps");
+    ul.innerHTML = "";
+    for (const lap of laps) {
+      const li = document.createElement("li");
+      li.textContent = `#${lap.lap_index}  lap=${fmt(lap.lap_elapsed_ms)}  total=${fmt(lap.total_elapsed_ms)}`;
+      ul.appendChild(li);
     }
+  }
 
-    async function api(path, method = "GET") {
-      const res = await fetch(path, { method });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw { status: res.status, body };
-      return body;
+  async function syncTimer() {
+    const t = await api("/timer");
+    t_state = t.state;
+    baseElapsed = t.elapsed_ms;
+    startAt = (t_state === "running") ? performance.now() : null;
+    $("state").textContent = t_state;
+    renderLaps(t.laps || []);
+  }
+
+  function renderTimer() {
+    let ms = baseElapsed;
+    if (t_state === "running" && startAt !== null) {
+      ms += Math.floor(performance.now() - startAt);
     }
+    $("time").textContent = fmt(ms);
+    requestAnimationFrame(renderTimer);
+  }
 
-    /* -----------------------------------
-       API の状態を UI に反映する処理（500msごと）
-    ----------------------------------- */
-    async function refresh() {
-      const t = await api("/timer");
+  $("start").onclick = async () => { try { await api("/timer/start","POST"); } catch(e){} await syncTimer(); };
+  $("stop").onclick  = async () => { try { await api("/timer/stop","POST"); } catch(e){} await syncTimer(); };
+  $("lap").onclick   = async () => { try { await api("/timer/lap","POST"); } catch(e){} await syncTimer(); };
+  $("reset").onclick = async () => { try { await api("/timer/reset","POST"); } catch(e){} await syncTimer(); };
 
-      $("state").textContent = t.state;
+  // ---- CLOCK
+  async function syncClock() {
+    const tz = $("tz").value;
+    const data = await api(`/clock?tz=${encodeURIComponent(tz)}`);
+    $("clock-time").textContent = data.iso.replace("T", " ").split(".")[0];
+    $("clock-iso").textContent = `iso=${data.iso}  epoch_ms=${data.epoch_ms}`;
+  }
+  $("clock-refresh").onclick = syncClock;
+  $("tz").onchange = syncClock;
 
-      const nowRunning = t.state === "running";
+  setInterval(() => { if (mode === "clock") syncClock().catch(()=>{}); }, 1000);
 
-      if (!nowRunning) {
-        // 停止状態 → 時間は API の値をそのまま描画
-        running = false;
-        localStart = null;
-        localBaseElapsed = t.elapsed_ms;
-        $("time").textContent = fmt(t.elapsed_ms);
-      } else {
-        // running に入った瞬間のみ基準時刻を更新
-        if (!running) {
-          localStart = Date.now() - t.elapsed_ms;
-          localBaseElapsed = 0;
-        }
-        running = true;
-      }
-
-      // ラップ一覧更新
-      const ul = $("laps");
-      ul.innerHTML = "";
-      for (const lap of t.laps) {
-        const li = document.createElement("li");
-        li.textContent = `#${lap.lap_index} lap=${fmt(lap.lap_elapsed_ms)} total=${fmt(lap.total_elapsed_ms)}`;
-        ul.appendChild(li);
-      }
-    }
-
-    /* -----------------------------------
-       リアルタイムで時間を滑らかに描画
-       → requestAnimationFrame がポイント
-    ----------------------------------- */
-    function renderLoop() {
-      if (running && localStart !== null) {
-        const ms = Date.now() - localStart;
-        $("time").textContent = fmt(ms);
-      }
-      requestAnimationFrame(renderLoop);
-    }
-    renderLoop();
-
-    /* -----------------------------------
-       ボタン操作
-    ----------------------------------- */
-    $("start").onclick = async () => { try { await api("/timer/start", "POST"); } catch (e) { } await refresh(); };
-    $("stop").onclick = async () => { try { await api("/timer/stop", "POST"); } catch (e) { } await refresh(); };
-    $("lap").onclick = async () => { try { await api("/timer/lap", "POST"); } catch (e) { } await refresh(); };
-    $("reset").onclick = async () => { try { await api("/timer/reset", "POST"); } catch (e) { } await refresh(); };
-
-    // 初回読み込み & 500ms ごと状態同期
-    setInterval(refresh, 500);
-    refresh();
-  </script>
-
+  // init
+  syncTimer();
+  requestAnimationFrame(renderTimer);
+</script>
 </body>
-
 </html>
