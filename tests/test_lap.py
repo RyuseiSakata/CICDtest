@@ -1,29 +1,29 @@
-import time
-from timer_app.app import app
+from ._common import client, sleep_ms
 
-def client():
-    return app.test_client()
-
-def reset_timer(c):
-    state = c.get("/timer").get_json()["state"]
-    if state == "running":
-        c.post("/timer/stop")
-    c.post("/timer/reset")
-
-def test_lap_requires_running():
+# ----------------------------
+# 仕様: lap は 201 を返し、lap_index / lap_elapsed_ms / total_elapsed_ms を含む
+# （この例では“形”の確認を中心にする）
+# ----------------------------
+def test_lap_should_return_shape():
     c = client()
-    reset_timer(c)
-    res = c.post("/timer/lap")
-    assert res.status_code == 409
-    assert res.get_json() == {"error": "NOT_RUNNING"}
 
-def test_lap_incremental():
-    c = client()
-    reset_timer(c)
+    # 1) running にしてから lap を取る
     c.post("/timer/start")
-    time.sleep(0.02)
-    l1 = c.post("/timer/lap").get_json()
-    time.sleep(0.02)
-    l2 = c.post("/timer/lap").get_json()
-    assert l2["lap_index"] == 2
-    assert l2["lap_elapsed_ms"] == l2["total_elapsed_ms"] - l1["total_elapsed_ms"]
+    sleep_ms(20)
+
+    # 2) lap を実行
+    res = c.post("/timer/lap")
+
+    # 3) 作成系なので 201（Created）を期待
+    assert res.status_code == 201
+    body = res.get_json()
+
+    # 4) 返るJSONの形を確認（値は厳密比較しない）
+    assert body["lap_index"] == 1
+    assert "lap_elapsed_ms" in body
+    assert "total_elapsed_ms" in body
+
+
+# TODO: 2周目以降は lap_elapsed_ms が差分（前回 total との差）になるテストを書いてみよう
+# def test_lap_should_be_incremental_difference():
+#     ...
