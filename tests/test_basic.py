@@ -18,5 +18,4 @@ def test_health_should_return_ok():
 
 
 # TODO: 画面（GET /）が 200 を返すテストを追加してみよう
-# def test_index_should_load_html():
 #     ...
